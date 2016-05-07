@@ -1,0 +1,29 @@
+#!/bin/bash -e
+
+bindir=$(realpath --relative-to . "$(dirname "$0")")
+
+. "$bindir"/functions
+
+USAGE="Usage: $0"
+
+while getopts hb:-: arg; do
+    case $arg in
+        h) warn "$USAGE"; exit 0 ;;
+        #b) ARG_B="$OPTARG" ;;
+        -) LONG_OPTARG="${OPTARG#*=}"
+            case $OPTARG in
+                help)  warn "$USAGE"; exit 0 ;;
+                #letter-b=?*)    ARG_B="$LONG_OPTARG" ;;
+                #letter-b*)        error "Option '--$OPTARG' requires an argument" ;;
+                #letter-a* | letter-c* ) error "Option '--$OPTARG' doesn't allow an argument" ;;
+                '')    break ;; # "--" terminates argument processing
+                *)     error "Illegal option --$OPTARG" ;;
+                esac
+        ;;
+    esac
+done
+shift $((OPTIND-1))
+
+cmd touch src/*.rs
+cmd src/rh-parse/make
+cmd cargo run

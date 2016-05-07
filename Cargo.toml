@@ -1,0 +1,9 @@
+[package]
+name = "readline-hooks"
+version = "0.1.0"
+authors = ["misterfish <allen@netherrealm.net>"]
+
+[dependencies]
+libc = "0.2.0"
+regex = "0.1"
+shlex = "0.1.1"
