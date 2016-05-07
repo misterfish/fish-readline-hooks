@@ -210,36 +210,38 @@ fn process(cdata: &str, dir: &str, num: &str, dispatcher: &Dispatcher, readline_
     let ref cb = dispatcher.cb;
 
     // --- with quotes and ~ resolved.
-    let dir_real = match shlex::split(dir) {
-        // --- Vec<String>.
-        Some(res) => {
-            if res.len() != 1 {
-                warn(format!("Error processing dir {:?}", res));
+    let dir_real =
+        if dir.len() == 0 { dir.to_string() }
+        else { match shlex::split(dir) {
+            // --- Vec<String>.
+            Some(res) => {
+                if res.len() != 1 {
+                    warn(format!("Error processing dir {:?}", res));
+                    return Err(());
+                }
+                let word = &res[0];
+
+                warn(format!("word is {}", word));
+
+                // --- do ~.
+                let re = Regex::new(r#"(?x) ^ ~ "#)
+                    .unwrap_or_else(|e| { panic!("{}", e) });
+
+                let home = get_env("HOME");
+                if home.len() == 0 {
+                    warn(format!("Can't get home dir"));
+                    return Err(());
+                }
+                re.replace_all(word, home.as_str())
+            },
+            _       => {
+                warn(format!("Error processing dir with shlex: {}", dir));
                 return Err(());
-            }
-            let word = &res[0];
-
-            warn(format!("word is {}", word));
-
-            // --- do ~.
-            let re = Regex::new(r#"(?x) ^ ~ "#)
-                .unwrap_or_else(|e| { panic!("{}", e) });
-
-            let home = get_env("HOME");
-            if home.len() == 0 {
-                warn(format!("Can't get home dir"));
-                return Err(());
-            }
-            re.replace_all(word, home.as_str())
-        },
-        _       => {
-            warn(format!("Error processing dir with shlex: {}", dir));
-            return Err(());
-        },
-    };
+            },
+        }};
 
     let data = DispatchData {
-        dir: dir_real.to_string(),
+        dir: dir_real,
         num: num.to_string(),
     };
 
