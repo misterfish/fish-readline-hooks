@@ -221,7 +221,7 @@ fn process(cdata: &str, dir: &str, num: &str, dispatcher: &Dispatcher, readline_
                 }
                 let word = &res[0];
 
-                warn(format!("word is {}", word));
+                //warn(format!("word is {}", word));
 
                 // --- do ~.
                 let re = Regex::new(r#"(?x) ^ ~ "#)
