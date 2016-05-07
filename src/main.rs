@@ -21,14 +21,15 @@ use regex::Regex;
 type DispatchCommandResults = Result<(String, bool, bool), ()>;
 
 // --- (cdata, num, dir, cmd).
-//type CommandParseParsed<'a> = (&'a str, &'a str, &'a str, &'a str);
 type CommandParseParsed<'a> = (String, String, String, String);
 
+/*
 enum CommandParseResult<'a> {
     Found( CommandParseParsed<'a> ),
     NotFound,
     Err(&'a str),
 }
+*/
 
 struct Config {
     history_file_path: &'static str,
@@ -42,13 +43,17 @@ const config: Config = Config {
 struct Main {
     // --- storing a box is probably not really better than just storing the struct.
     dispatchers: Vec<Box<Dispatcher>>,
-
-    parse_results: ParseResults,
+    //parse_results: ParseResults,
 }
 
 // --- where the ffi parser stuffs results as it goes.
 //
 // the strings get dup'ed so the ffi parser can free them.
+//
+// we're not technically allowed to pass Strings to the foreign interface, so we have to 'promise'
+// not to use them (by silencing the warning at the call site).
+
+#[repr(C)]
 struct ParseResults {
     cdata:  String,
     num:    String,
@@ -67,13 +72,16 @@ impl Main {
         self.dispatchers.push(Box::new(dispatcher));
     }
     
+    /*
     fn parse_event_cdata(&mut self, cdata: &str) {
         self.parse_results.cdata = cdata.to_string();
     }
+    */
 }
 
 struct DispatchData {
-    first_part: String,
+    dir: String,
+    num: String,
 }
 
 struct Dispatcher {
@@ -96,7 +104,6 @@ const DISPATCH: &'static [(&'static str, fn(DispatchData) -> DispatchCommandResu
     (r" ^ tr    $", handle_tr),
     (r" ^ l     $", handle_l),
     (r" ^ lr    $", handle_lr),
-    (r" ^ T     $", handle_T),
     (r" ^ z     $", handle_z),
 ];
 
@@ -105,7 +112,7 @@ fn main() {
     let main = get_main();
 
     // to practice XX
-    let mut my_results = ParseResults {
+    let my_results = ParseResults {
         cdata: "".to_string(),
         cmd: "".to_string(),
         num: "".to_string(),
@@ -130,7 +137,8 @@ fn main() {
     for dispatcher in &main.dispatchers {
         let ref re = (*dispatcher).re;
         if re.is_match(cmd) {
-            match process(cdata, dispatcher, &readline_state_in) {
+            // --- we don't need to send the cmd: we already have the right dispatcher.
+            match process(cdata, dir, num, dispatcher, &readline_state_in) {
                 Ok(readline_state_out) => {
                     store_history(cdata);
                     output(&readline_state_out);
@@ -154,12 +162,14 @@ fn main() {
 fn get_main() -> Main {
     let mut main = Main {
         dispatchers: Vec::new(),
+        /*
         parse_results: ParseResults {
             cdata: "".to_string(),
             num: "".to_string(),
             dir: "".to_string(),
             cmd: "".to_string(),
         },
+        */
     };
 
     for n in 0..DISPATCH.len() {
@@ -170,9 +180,6 @@ fn get_main() -> Main {
 
     main
 }
-
-//fn parse<'a, 'b>(parse_results: &'b ParseResults, line: &'a str) -> Result<CommandParseParsed<'a>, &'a str> {
-//fn parse<'a, 'b>(parse_results: &'b mut Box<ParseResults>, line: &'a str) -> Result<CommandParseParsed<'a>, &'a str> {
 
 fn parse<'a, 'b>(parse_results: &'b mut Box<ParseResults>, line: &'a str) -> Result<(), &'a str> {
 
@@ -199,13 +206,14 @@ fn parse<'a, 'b>(parse_results: &'b mut Box<ParseResults>, line: &'a str) -> Res
     Ok(())
 }
 
-fn process(first_part: &str, dispatcher: &Dispatcher, readline_state: &ReadlineState) ->
+fn process(cdata: &str, dir: &str, num: &str, dispatcher: &Dispatcher, readline_state: &ReadlineState) ->
     Result<ReadlineState, ()> {
 
     let ref cb = dispatcher.cb;
 
     let data = DispatchData {
-        first_part: first_part.to_string(),
+        dir: dir.to_string(),
+        num: num.to_string(),
     };
 
     let (output, should_rewind, should_quote) = match cb(data) {
@@ -213,13 +221,13 @@ fn process(first_part: &str, dispatcher: &Dispatcher, readline_state: &ReadlineS
         _       => return Err(()),
     };
 
-    let output_quoted = match should_quote {
+    let output_maybe_quoted = match should_quote {
         true    => shell_quote(&output),
         _       => output,
     };
 
     Ok(
-        get_output(&readline_state.point, first_part.to_string(), output_quoted, should_rewind)
+        get_output(&readline_state.point, cdata.to_string(), output_maybe_quoted, should_rewind)
     )
 }
 
@@ -250,8 +258,9 @@ fn get_output(point_in: &str, first_part: String, output: String, should_rewind:
     let point_in_u32 = point_in.parse::<u32>()
         .unwrap_or_else(|e| { panic!("{}", e) });
 
-    let line: String = vec![first_bit, output, " ".to_string()]
-        .join("");
+    let line: String = vec![first_bit, output]
+        .join(" ");
+
     let point: String = (point_in_u32 as u32 + line.len() as u32 + 1)
         .to_string();
 
@@ -337,7 +346,7 @@ fn git_commit() -> DispatchCommandResults {
     Ok( (output.to_string(), true, false) )
 }
 
-fn ls_last_priv(arg: &str, dir: &str) -> DispatchCommandResults {
+fn ls_last_priv(arg: &str, dir: &str, num: &str) -> DispatchCommandResults {
     let mut arg_vec = match arg.len() {
         0   => vec![],
         _   => vec![arg]
@@ -350,19 +359,36 @@ fn ls_last_priv(arg: &str, dir: &str) -> DispatchCommandResults {
         _       => return Err(()),
     };
 
-    // --- empty dir: return "".
-    let mut last = "";
+    // 1-based.
+    let idx = match num.len() {
+        0   => 1,
+        _   => match num.parse::<usize>() {
+            Ok(i)   => i,
+            _       => {
+                warn(format!("That's totally not an int: {}", num));
+                1
+            },
+        }
+    };
 
-    match result.lines().last() {
-        Some(l)     => last = l,
-        _           => {},
-    }
+    // -- iterate twice, better way??
+    let cnt: usize = result.lines().count();
+
+    // --- empty dir or invalid idx: return "" (and consider it Ok).
+
+    let entry = match result.lines().nth(cnt - 1 - 1 - idx) {
+        Some(l)     => l,
+        _           => "",
+    };
+
     let ret = match dir.len() {
-        0   => last.to_string(),
+        0   => entry.to_string(),
         _   => {
+            // --- kill trailing slash (but why? XX)
             let re = Regex::new(r"(?x) /$ $ ")
                 .unwrap_or_else(|e| { panic!("{}", e) });
-            let base = re.replace_all(last, "");
+            let base = re.replace_all(entry, "");
+
             format!("{}/{}", dir, base)
         },
     };
@@ -374,35 +400,19 @@ fn handle_g(_: DispatchData) -> DispatchCommandResults {
 }
 
 // --- t and tr switched on purpose.
-fn handle_t(_: DispatchData) -> DispatchCommandResults {
-    ls_last_priv("-tr", "")
+fn handle_t(dispatch_data: DispatchData) -> DispatchCommandResults {
+    ls_last_priv("-tr", &dispatch_data.dir, &dispatch_data.num)
 }
-fn handle_tr(_: DispatchData) -> DispatchCommandResults {
-    ls_last_priv("-t", "")
+fn handle_tr(dispatch_data: DispatchData) -> DispatchCommandResults {
+    ls_last_priv("-t", &dispatch_data.dir, &dispatch_data.num)
 }
-fn handle_l(_: DispatchData) -> DispatchCommandResults {
-    ls_last_priv("", "")
+fn handle_l(dispatch_data: DispatchData) -> DispatchCommandResults {
+    ls_last_priv("", &dispatch_data.dir, &dispatch_data.num)
 }
-fn handle_lr(_: DispatchData) -> DispatchCommandResults {
-    ls_last_priv("-r", "")
+fn handle_lr(dispatch_data: DispatchData) -> DispatchCommandResults {
+    ls_last_priv("-r", &dispatch_data.dir, &dispatch_data.num)
 }
-#[allow(non_snake_case)]
-fn handle_T(data: DispatchData) -> DispatchCommandResults {
-    let (first_words, dir) = get_words_partition_right(&data.first_part);
 
-    // --- String.
-    let (file, _, _) = match ls_last_priv("-tr", &dir) {
-        Ok(r)   => r,
-        _       => return Err(()),
-    };
-
-    let file_quoted = shell_quote(&file);
-
-    let out = vec![first_words.to_string(), file_quoted]
-        .join(" ");
-
-    Ok( (out, true, false) )
-}
 fn handle_z(_: DispatchData) -> DispatchCommandResults {
     let out = match get_history() {
         Ok(o)   => o,
@@ -410,27 +420,6 @@ fn handle_z(_: DispatchData) -> DispatchCommandResults {
     };
     Ok( (out, true, false) )
 }
-
-// --- general.
-
-fn get_words_partition_right(input: &str) -> (String, String) {
-    let mut words: Vec<String> = get_words(input);
-    let last_word = match words.pop() {
-        None    => return ("".to_string(), "".to_string()),
-        Some(s) => s,
-    };
-    let first_words = words.join(" ");
-    (first_words, last_word)
-}
-
-fn get_words(input: &str) -> Vec<String> {
-    match shlex::split(input) {
-        None    => panic!("couldn't shlex"),
-        Some(s) => s
-    }
-}
-
-// --- util.
 
 #[allow(dead_code)]
 fn warn(w: String) {
@@ -467,8 +456,8 @@ fn cmd(bin: &str, args: Vec<&str>) -> Result<String, ()> {
         warn (format!("Command «{}» unsuccessful.", full));
         return Err(());
     }
-    // from_utf8_lossy? XX
 
+    // from_utf8_lossy? XX
     Ok(
         String::from_utf8(output.stdout)
             .unwrap_or_else(|e| { panic!("failed to unwrap output: {}", e) })
@@ -496,7 +485,8 @@ fn set_env(key: &'static str, val: String) {
 
 
 #[link(name="rh-parse", kind="static")]
-extern {
+#[allow(improper_ctypes)]
+extern "C" {
     // --- some types:
     //
     // u8 -> char.
@@ -507,10 +497,10 @@ extern {
     fn rh_parse_set_input(_: *const u8);
     fn rh_parse_start() -> c_int;
 
-    fn rh_parse_register_cb_store_num(cb: extern fn(_: *mut ParseResults, _: i32));
-    fn rh_parse_register_cb_store_cdata(cb: extern fn(_: *mut ParseResults, _: *const u8, _: size_t));
-    fn rh_parse_register_cb_store_dir(cb: extern fn(_: *mut ParseResults, _: *const u8, _: size_t));
-    fn rh_parse_register_cb_store_command(cb: extern fn(_: *mut ParseResults, _: *const u8, _: size_t));
+    fn rh_parse_register_cb_store_num(cb: extern "C" fn(_: *mut ParseResults, _: i32));
+    fn rh_parse_register_cb_store_cdata(cb: extern "C" fn(_: *mut ParseResults, _: *const u8, _: size_t));
+    fn rh_parse_register_cb_store_dir(cb: extern "C" fn(_: *mut ParseResults, _: *const u8, _: size_t));
+    fn rh_parse_register_cb_store_command(cb: extern "C" fn(_: *mut ParseResults, _: *const u8, _: size_t));
 }
 
 // --- called from c /
@@ -520,13 +510,14 @@ extern fn parse_store_cdata(parse_results: *mut ParseResults, data: *const u8, l
         let thestr = std::str::from_utf8(slice)
             .unwrap_or_else(|e| { panic!("{}", e); });
 
-        //println!("ping cdata! {}", thestr);
-
         let ref cur_cdata = (*parse_results).cdata;
         // dangle ... xx??
-        (*parse_results).cdata =
-            // gobbles spaces XX
-            format!("{} {}", cur_cdata, thestr);
+        let mut joined = vec![cur_cdata.to_string(), thestr.to_string()];
+        joined.retain(|e| e != "");
+        (*parse_results).cdata = joined
+            .join(" ");
+        //println!("ping cdata! {}", (*parse_results).cdata);
+
     };
 }
 extern fn parse_store_command(parse_results: *mut ParseResults, data: *const u8, len: size_t) {

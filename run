@@ -26,4 +26,4 @@ shift $((OPTIND-1))
 
 cmd touch src/*.rs
 cmd ./make
-cmd cargo run
+cmd cargo run --release
