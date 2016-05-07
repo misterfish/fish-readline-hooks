@@ -8,9 +8,8 @@ target
 *.output
 
 
-!target/debug/deps
-
-target/debug/deps/*.rlib
+#!target/debug/deps
+#target/debug/deps/*.rlib
 
 lib/fish-lib-util
 
