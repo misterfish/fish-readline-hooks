@@ -20,11 +20,12 @@ use regex::Regex;
 // --- (output, should_rewind, should_quote) / empty error.
 type DispatchCommandResults = Result<(String, bool, bool), ()>;
 
-// --- (first_part, cmd, join).
-type CommandParseParsed<'a> = (&'a str, &'a str, &'a str);
+// --- (cdata, num, dir, cmd).
+//type CommandParseParsed<'a> = (&'a str, &'a str, &'a str, &'a str);
+type CommandParseParsed<'a> = (String, String, String, String);
 
 enum CommandParseResult<'a> {
-    Found( (&'a str, &'a str, &'a str) ),
+    Found( CommandParseParsed<'a> ),
     NotFound,
     Err(&'a str),
 }
@@ -41,10 +42,22 @@ const config: Config = Config {
 struct Main {
     // --- storing a box is probably not really better than just storing the struct.
     dispatchers: Vec<Box<Dispatcher>>,
+
+    parse_results: ParseResults,
+}
+
+// --- where the ffi parser stuffs results as it goes.
+//
+// the strings get dup'ed so the ffi parser can free them.
+struct ParseResults {
+    cdata:  String,
+    num:    String,
+    dir:    String,
+    cmd:    String,
 }
 
 impl Main {
-    fn add(&mut self, re: &str, func: fn(DispatchData) -> DispatchCommandResults) {
+    fn add_dispatcher(&mut self, re: &str, func: fn(DispatchData) -> DispatchCommandResults) {
         let re_full = "(?x)".to_string() + re;
         let dispatcher = Dispatcher {
             re: Regex::new(&re_full)
@@ -52,6 +65,10 @@ impl Main {
             cb: func,
         };
         self.dispatchers.push(Box::new(dispatcher));
+    }
+    
+    fn parse_event_cdata(&mut self, cdata: &str) {
+        self.parse_results.cdata = cdata.to_string();
     }
 }
 
@@ -84,25 +101,43 @@ const DISPATCH: &'static [(&'static str, fn(DispatchData) -> DispatchCommandResu
 ];
 
 fn main() {
+    // --- stores global parse data and command dispatch table.
     let main = get_main();
+
+    // to practice XX
+    let mut my_results = ParseResults {
+        cdata: "".to_string(),
+        cmd: "".to_string(),
+        num: "".to_string(),
+        dir: "".to_string(),
+    };
+    let mut results_ptr = Box::new(my_results);
 
     register_ffi();
 
     let readline_state_in = get_readline_state();
 
-    let (first_part, command, join) = get_cmd(&readline_state_in.line)
+    //let (cdata, num, dir, command) = parse(&main.parse_results, &readline_state_in.line)
+    //let (cdata, num, dir, command) = parse(&mut results_ptr, &readline_state_in.line)
+    parse(&mut results_ptr, &readline_state_in.line)
         .unwrap_or_else(|e| { panic!("{}", e) });
+
+    let cdata = &results_ptr.cdata;
+    let dir = &results_ptr.dir;
+    let num = &results_ptr.num;
+    let cmd = &results_ptr.cmd;
 
     for dispatcher in &main.dispatchers {
         let ref re = (*dispatcher).re;
-        if re.is_match(&command) {
-            match process(first_part, join, dispatcher, &readline_state_in) {
+        if re.is_match(cmd) {
+            match process(cdata, dispatcher, &readline_state_in) {
                 Ok(readline_state_out) => {
-                    store_history(first_part);
+                    store_history(cdata);
                     output(&readline_state_out);
                 },
                 // --- do nothing if process failed.
-                _   => {},
+                //_   => {},
+                _   => return,
             }
             // --- done.
             break;
@@ -119,96 +154,52 @@ fn main() {
 fn get_main() -> Main {
     let mut main = Main {
         dispatchers: Vec::new(),
+        parse_results: ParseResults {
+            cdata: "".to_string(),
+            num: "".to_string(),
+            dir: "".to_string(),
+            cmd: "".to_string(),
+        },
     };
 
     for n in 0..DISPATCH.len() {
         let pair = DISPATCH[n];
         let (re, cb) = pair;
-        main.add(re, cb);
+        main.add_dispatcher(re, cb);
     }
 
     main
 }
 
-// --- defaults to t if spaces at end or length is 0.
-//
-// the tokens are slices with the lifetime of the input line.
-//
-// the type of the capture struct is Captures<'t>, where 't is the lifetime of the input line.
+//fn parse<'a, 'b>(parse_results: &'b ParseResults, line: &'a str) -> Result<CommandParseParsed<'a>, &'a str> {
+//fn parse<'a, 'b>(parse_results: &'b mut Box<ParseResults>, line: &'a str) -> Result<CommandParseParsed<'a>, &'a str> {
 
-fn get_cmd<'a>(line: &'a str) -> Result<CommandParseParsed, &'a str> {
+fn parse<'a, 'b>(parse_results: &'b mut Box<ParseResults>, line: &'a str) -> Result<(), &'a str> {
 
-    match get_cmd_empty(line) {
-        CommandParseResult::Err(e)      => return Err(e),
-        CommandParseResult::Found(f)    => return Ok(f),
-        _ => {},
+    let input = line.to_string();
+    unsafe {
+        rh_parse_init(&mut **parse_results);
+        rh_parse_set_input((input + "\0").as_bytes().as_ptr());
+        rh_parse_start();
     }
 
-    match get_cmd_space_at_end(line) {
-        CommandParseResult::Err(e)      => return Err(e),
-        CommandParseResult::Found(f)    => return Ok(f),
-        _ => {},
-    }
+    // --- no real Err case for the enum currently.
 
-    match get_cmd_nonspace_at_end(line) {
-        CommandParseResult::Err(e)      => return Err(e),
-        CommandParseResult::Found(f)    => return Ok(f),
-        _ => {},
-    }
-
-    Err("ierror command parse")
-}
-
-fn get_cmd_empty<'a>(line: &'a str) -> CommandParseResult {
-    match line.len() {
-        0   => CommandParseResult::Found( ("", "t", "") ),
-        _   => CommandParseResult::NotFound,
-    }
-}
-
-fn get_cmd_space_at_end<'a>(line: &'a str) -> CommandParseResult {
-    // --- spaces at end: -> 't'.
-    let re = Regex::new(r"(?x) ^ (.*?) (\s+) $ ")
-        .unwrap_or_else(|e| { panic!("{}", e) });
-
-    match re.captures(line) {
-        Some(caps)  => {
-            let cmd = "t";
-            let join = " ";
-            let first_part = match caps.at(1) {
-                Some(c) => c,
-                _       => "",
-            };
-            CommandParseResult::Found( (first_part, cmd, join) )
+    match parse_results.cmd.len() {
+        // --- parse error / command not found
+        0   => {
+            parse_results.cdata = line.to_string();
+            parse_results.dir = "".to_string();
+            parse_results.num = "".to_string();
+            parse_results.cmd = "".to_string();
         },
-        _   => CommandParseResult::NotFound,
-    }
+        _   => {},
+    };
+
+    Ok(())
 }
 
-fn get_cmd_nonspace_at_end<'a>(line: &'a str) -> CommandParseResult {
-    let re = Regex::new(r"(?x) ^ (.*?) (\S+) $ ")
-        .unwrap_or_else(|e| { panic!("{}", e) });
-
-    match re.captures(line) {
-        // --- because empty line has already been caught.
-        None        => CommandParseResult::Err("ierror regex"),
-        Some(caps)  => {
-            let first_part = match caps.at(1) {
-                Some(c) => c,
-                _       => "",
-            };
-            let cmd = match caps.at(2) {
-                Some(c) => c,
-                _       => return CommandParseResult::Err("ierror regex"),
-            };
-            let join = "";
-
-            CommandParseResult::Found( (first_part, cmd, join) )
-        }
-    }
-}
-
-fn process(first_part: &str, join: &str, dispatcher: &Dispatcher, readline_state: &ReadlineState) ->
+fn process(first_part: &str, dispatcher: &Dispatcher, readline_state: &ReadlineState) ->
     Result<ReadlineState, ()> {
 
     let ref cb = dispatcher.cb;
@@ -228,13 +219,21 @@ fn process(first_part: &str, join: &str, dispatcher: &Dispatcher, readline_state
     };
 
     Ok(
-        get_output(&readline_state.point, first_part.to_string(), output_quoted, should_rewind, join.to_string())
+        get_output(&readline_state.point, first_part.to_string(), output_quoted, should_rewind)
     )
 }
 
 fn get_readline_state() -> ReadlineState {
-    let line: String = get_env("READLINE_LINE");
-    let point: String = get_env("READLINE_POINT");
+    let mut line: String = get_env("READLINE_LINE");
+    let mut point: String = get_env("READLINE_POINT");
+
+    if point.len() == 0 {
+        warn("READLINE_POINT not set, running with test data.".to_string());
+        warn("".to_string());
+        line = "mv -iv = /tmp 2 t".to_string();
+        // ?
+        point = format!("{}", line.len());
+    }
     
     ReadlineState {
         line: line,
@@ -242,7 +241,7 @@ fn get_readline_state() -> ReadlineState {
     }
 }
 
-fn get_output(point_in: &str, first_part: String, output: String, should_rewind: bool, join: String) -> ReadlineState {
+fn get_output(point_in: &str, first_part: String, output: String, should_rewind: bool) -> ReadlineState {
     let first_bit = match should_rewind {
         true    => "".to_string(),
         false   => first_part,
@@ -252,8 +251,8 @@ fn get_output(point_in: &str, first_part: String, output: String, should_rewind:
         .unwrap_or_else(|e| { panic!("{}", e) });
 
     let line: String = vec![first_bit, output, " ".to_string()]
-        .join(&join);
-    let point: String = (point_in_u32 + join.len() as u32 + line.len() as u32 + 1)
+        .join("");
+    let point: String = (point_in_u32 as u32 + line.len() as u32 + 1)
         .to_string();
 
     ReadlineState {
@@ -504,44 +503,58 @@ extern {
     // c_int -> int
     // *const u8 -> char*
 
-    fn rh_parse_init();
+    fn rh_parse_init(parse_results: *mut ParseResults);
     fn rh_parse_set_input(_: *const u8);
     fn rh_parse_start() -> c_int;
 
-    fn rh_parse_register_cb_store_num(cb: extern fn(_: i32));
-    fn rh_parse_register_cb_store_cdata(cb: extern fn(_: *const u8, _: size_t));
-    fn rh_parse_register_cb_store_dir(cb: extern fn(_: *const u8, _: size_t));
-    fn rh_parse_register_cb_store_command(cb: extern fn(_: *const u8, _: size_t));
+    fn rh_parse_register_cb_store_num(cb: extern fn(_: *mut ParseResults, _: i32));
+    fn rh_parse_register_cb_store_cdata(cb: extern fn(_: *mut ParseResults, _: *const u8, _: size_t));
+    fn rh_parse_register_cb_store_dir(cb: extern fn(_: *mut ParseResults, _: *const u8, _: size_t));
+    fn rh_parse_register_cb_store_command(cb: extern fn(_: *mut ParseResults, _: *const u8, _: size_t));
 }
 
 // --- called from c /
-extern fn parse_store_cdata(data: *const u8, len: size_t) {
-    let thestr = unsafe {
+extern fn parse_store_cdata(parse_results: *mut ParseResults, data: *const u8, len: size_t) {
+    unsafe {
         let slice = slice::from_raw_parts(data, len - 1);
-        std::str::from_utf8(slice)
-            .unwrap_or_else(|e| { panic!("{}", e); })
+        let thestr = std::str::from_utf8(slice)
+            .unwrap_or_else(|e| { panic!("{}", e); });
+
+        //println!("ping cdata! {}", thestr);
+
+        let ref cur_cdata = (*parse_results).cdata;
+        // dangle ... xx??
+        (*parse_results).cdata =
+            // gobbles spaces XX
+            format!("{} {}", cur_cdata, thestr);
     };
-    println!("ping cdata! {}", thestr);
 }
-extern fn parse_store_command(data: *const u8, len: size_t) {
-    let thestr = unsafe {
+extern fn parse_store_command(parse_results: *mut ParseResults, data: *const u8, len: size_t) {
+    unsafe {
         let slice = slice::from_raw_parts(data, len - 1);
-        std::str::from_utf8(slice)
-            .unwrap_or_else(|e| { panic!("{}", e); })
+        let thestr = std::str::from_utf8(slice)
+            .unwrap_or_else(|e| { panic!("{}", e); });
+
+        (*parse_results).cmd = thestr.to_string();
     };
-    println!("ping command! {}", thestr);
+    //println!("ping command! {}", thestr);
 }
-extern fn parse_store_dir(data: *const u8, len: size_t) {
-    let thestr = unsafe {
+extern fn parse_store_dir(parse_results: *mut ParseResults, data: *const u8, len: size_t) {
+    unsafe {
         let slice = slice::from_raw_parts(data, len - 1);
-        std::str::from_utf8(slice)
-            .unwrap_or_else(|e| { panic!("{}", e); })
+        let thestr = std::str::from_utf8(slice)
+            .unwrap_or_else(|e| { panic!("{}", e); });
+
+        (*parse_results).dir = thestr.to_string();
     };
-    println!("ping dir! {}", thestr);
+    //println!("ping dir! {}", thestr);
 }
-extern fn parse_store_num(num: i32) {
-    println!("ping num! {}", num);
+extern fn parse_store_num(parse_results: *mut ParseResults, num: i32) {
+    unsafe {
+        (*parse_results).num = format!("{}", num);
+    }
 }
+
 // /.
 
 fn register_ffi() {
@@ -551,30 +564,4 @@ fn register_ffi() {
         rh_parse_register_cb_store_dir(parse_store_dir);
         rh_parse_register_cb_store_cdata(parse_store_cdata);
     }
-
 }
-
-/*
-fn main() {
-    let stdin = io::stdin();
-    for line in stdin.lock().lines() {
-        let line = line
-            .unwrap_or_else(|e| { panic!("{}", e); })
-            .trim()
-            .to_string();
-        unsafe {
-            rh_parse_init();
-            rh_parse_set_input((line + "\0").as_bytes().as_ptr());
-            rh_parse_start();
-        }
-    }
-}
-
-#[allow(dead_code)]
-fn get_cmd(code: i32) -> Result<&'static str, String> {
-    match code {
-        1   => Ok("last-t"),
-        _   => Err(format!("bad code {}", code)),
-    }
-}
-*/

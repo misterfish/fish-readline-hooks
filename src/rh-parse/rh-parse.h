@@ -25,10 +25,16 @@ const char *rh_parse_parse_get_command ();
 const char *rh_parse_parse_get_cdata ();
 const char *rh_parse_parse_get_dir ();
 
-// --- pointer to a function which takes x and returns y.
-typedef void (*rust_callback__int__void)(int);
+/* FFI */
+
+// --- pointer to a function which takes a void* and x and returns y.
+//
+// all of them take a a void* first: that's the handle to the rust results
+// object.
+
+typedef void (*rust_callback__int__void)(void*, int);
 //typedef void (*rust_callback__rh_command_type__void)(int);
-typedef void (*rust_callback__const_char_star_and_size_t__void)(const char *, size_t);
+typedef void (*rust_callback__const_char_star_and_size_t__void)(void*, const char *, size_t);
 
 void rh_parse_register_cb_store_num (rust_callback__int__void);
 void rh_parse_register_cb_store_command (rust_callback__const_char_star_and_size_t__void);

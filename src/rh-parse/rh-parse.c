@@ -46,6 +46,10 @@ static int int_length (int i) {
     return 1 + (int) log10(i);
 }
 
+
+/* FFI */
+static void *host_parse_results;
+
 static
 rust_callback__int__void
 host_cb_store_num;
@@ -61,6 +65,8 @@ host_cb_store_dir;
 static
 rust_callback__const_char_star_and_size_t__void
 host_cb_store_cdata;
+
+/* / */
 
 // --- called from parser.
 //
@@ -151,7 +157,9 @@ void rh_parse_register_cb_store_cdata(rust_callback__const_char_star_and_size_t_
     host_cb_store_cdata = cb;
 }
 
-void rh_parse_init () {
+void rh_parse_init (void *parse_results) {
+    host_parse_results = parse_results;
+
     global.end_of_stream = 0;
     global.done = 0;
 
@@ -180,7 +188,7 @@ void rh_parse_parse_store_num (int i) {
         iwarn("Host callback store_num not set.");
         return;
     }
-    host_cb_store_num(i);
+    host_cb_store_num(host_parse_results, i);
 }
 
 int rh_parse_parse_get_num () {
@@ -194,7 +202,7 @@ void rh_parse_parse_store_command (const char *i, size_t len) {
         iwarn("Host callback store_command not set.");
         return;
     }
-    host_cb_store_command(i, len);
+    host_cb_store_command(host_parse_results, i, len);
 }
 
 const char *rh_parse_parse_get_command () {
@@ -208,7 +216,7 @@ void rh_parse_parse_store_cdata (const char *i, size_t len) {
         iwarn("Host callback store_cdata not set.");
         return;
     }
-    host_cb_store_cdata(i, len);
+    host_cb_store_cdata(host_parse_results, i, len);
 }
 
 const char *rh_parse_parse_get_cdata () {
@@ -222,7 +230,7 @@ void rh_parse_parse_store_dir (const char *i, size_t len) {
         iwarn("Host callback store_dir not set.");
         return;
     }
-    host_cb_store_dir(i, len);
+    host_cb_store_dir(host_parse_results, i, len);
 }
 const char *rh_parse_parse_get_dir () {
     return global.parse->dir;
@@ -237,7 +245,7 @@ void rh_parse_parse_store_cdata_int (int i) {
         iwarn("Host callback store_cdata not set.");
         return;
     }
-    host_cb_store_cdata(str, int_str_length + 1);
+    host_cb_store_cdata(host_parse_results, str, int_str_length + 1);
 }
 
 #if TEST

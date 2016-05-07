@@ -25,5 +25,5 @@ done
 shift $((OPTIND-1))
 
 cmd touch src/*.rs
-cmd src/rh-parse/make
+cmd ./make
 cmd cargo run

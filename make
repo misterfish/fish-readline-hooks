@@ -1,7 +1,10 @@
 #!/bin/bash -e
 
 bindir=$(realpath "$(dirname "$0")")
-libdir=$(realpath "$bindir/../../lib")
+
+srcdir=$(realpath "$bindir/src")
+libdir=$(realpath "$bindir/lib")
+targetdir=$(realpath "$bindir/target")
 
 . "$bindir"/functions
 
@@ -27,7 +30,7 @@ shift $((OPTIND-1))
 
 GCC="gcc -fPIC -std=c99"
 
-chd "$bindir"
+chd "$srcdir/rh-parse"
 # --- -d to also make header.
 cmd bison --report=state -d rh-parse.y
 cmd $GCC -c rh-parse.c
@@ -37,13 +40,17 @@ chd "$libdir"
 chd fish-lib-util
 cmd make
 
-chd "$bindir"
+chd "$libdir"
+cmd ar r librh-parse.a \
+    "$srcdir/rh-parse"/rh-parse.o \
+    "$srcdir/rh-parse"/rh-parse.tab.o \
+    fish-lib-util/fish-util/fish-util.o
 
-cmd ar r ../../lib/librh-parse.a \
-    rh-parse.o \
-    rh-parse.tab.o \
-    "$libdir"/fish-lib-util/fish-util/fish-util.o \
-    "$libdir"/fish-lib-util/fish-utils/fish-utils.o
-
-
-
+cmd mkdir -p "$targetdir"
+chd "$targetdir"
+for build in release debug; do
+    cmd mkdir -p "$build/deps"
+    chd "$build/deps"
+    cmd ln -sf ../../../lib/librh-parse.a
+    chd ../..
+done
