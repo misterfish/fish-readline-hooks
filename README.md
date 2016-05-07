@@ -17,7 +17,7 @@ Basically everything from ```=``` through to the ```<ctl-k>``` gets run through 
 mv -iv = ~/Downloads <ctl-k> .
 
 # --- view the last pdf (by alphanum sort) in the "~/book shelf" directory.
-view-pdf = "~/book shelf" l <ctl-k>
+view-pdf = ~/bookshelf l <ctl-k>
 
 # --- cat the 3rd-to-last file (by timestamp) in /tmp.
 cat = /tmp 3 t <ctl-k>
