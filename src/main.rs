@@ -124,8 +124,6 @@ fn main() {
 
     let readline_state_in = get_readline_state();
 
-    //let (cdata, num, dir, command) = parse(&main.parse_results, &readline_state_in.line)
-    //let (cdata, num, dir, command) = parse(&mut results_ptr, &readline_state_in.line)
     parse(&mut results_ptr, &readline_state_in.line)
         .unwrap_or_else(|e| { panic!("{}", e) });
 
@@ -211,8 +209,37 @@ fn process(cdata: &str, dir: &str, num: &str, dispatcher: &Dispatcher, readline_
 
     let ref cb = dispatcher.cb;
 
+    // --- with quotes and ~ resolved.
+    let dir_real = match shlex::split(dir) {
+        // --- Vec<String>.
+        Some(res) => {
+            if res.len() != 1 {
+                warn(format!("Error processing dir {:?}", res));
+                return Err(());
+            }
+            let word = &res[0];
+
+            warn(format!("word is {}", word));
+
+            // --- do ~.
+            let re = Regex::new(r#"(?x) ^ ~ "#)
+                .unwrap_or_else(|e| { panic!("{}", e) });
+
+            let home = get_env("HOME");
+            if home.len() == 0 {
+                warn(format!("Can't get home dir"));
+                return Err(());
+            }
+            re.replace_all(word, home.as_str())
+        },
+        _       => {
+            warn(format!("Error processing dir with shlex: {}", dir));
+            return Err(());
+        },
+    };
+
     let data = DispatchData {
-        dir: dir.to_string(),
+        dir: dir_real.to_string(),
         num: num.to_string(),
     };
 
@@ -468,12 +495,10 @@ fn cmd(bin: &str, args: Vec<&str>) -> Result<String, ()> {
 
 // --- treat non-existent as "" (like perl, shell etc.)
 fn get_env(key: &str) -> String {
-    let line: String;
     match env::var(key) {
-        Ok(_line)    => { line = _line; }
-        Err(_)      => { line = "".to_string(); }
+        Ok(l)   => l,
+        _       => "".to_string(),
     }
-    line
 }
 
 #[allow(dead_code)]
