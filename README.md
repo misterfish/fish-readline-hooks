@@ -58,4 +58,6 @@ fish-readline-hooks() {
 
 Start a new shell and you should be good to go.
 
+It definitely works on GNU/Linux, probably works on most Unices, and probably won't work (out of the box) on Mac or Windows.
+
 
