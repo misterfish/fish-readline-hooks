@@ -9,7 +9,7 @@ This is a working implementation of a little language that will add more wow to 
 
 In these examples ```<ctl-k>``` means literally press ctl-k. You can choose your own magic key of course.
 
-Basically everything from ```=``` through to the ```<ctl-k>``` gets run through the mini-interpreter and replaced.
+Basically, everything from ```=``` through to the ```<ctl-k>``` gets run through the mini-interpreter and replaced.
 
 ```bash
 
@@ -31,7 +31,7 @@ The syntax is: `=` `dir` `num` `command`
 - `tr`: like `t` but reversed.
 - `lr`: like `l` but reversed.
 - `z`: undo previous command: if you don't like the replacement you got, add `= z<ctl-K>` and it will revert.
-  this one doesn't take a dir or a num.
+  This one doesn't take a dir or a num.
 
 In most unambiguous cases `dir` and `num` are optional (default to `.` and `1` respectively). `command` defaults to `t`.
 
