@@ -77,9 +77,10 @@ shift/reduce conflicts are resolved in favor of shifting.
 
 /*
 %precedence T_NUM
-%precedence T_LS_T
 %precedence T_CDATA
 */
+
+%precedence T_LS_T
 
 /*
 Name in <> corresponds to field in union.
@@ -94,6 +95,8 @@ Last field is an optional alias in "".
 %token T_LS_TR
 %token T_LS_L
 %token T_LS_LR
+%token T_LS_G
+%token T_LS_Z
 %token T_END
 
 /* Just to make stacking of rules easier (never returned) */
@@ -105,13 +108,18 @@ Last field is an optional alias in "".
  */
 
 input:
-  %empty
-| cdata_phrase T_END                { done(); }
-| cdata_phrase '=' command T_END    { done(); }
+  %empty {
+}| cdata_phrase T_END {
+    done();
+}| cdata_phrase '=' command T_END {
+    done();
+}| '=' command T_END {
+    done();
+}
 ;
 
 cdata_phrase:
-  cdata_phrase T_CDATA {
+   cdata_phrase T_CDATA {
         rh_parse_parse_store_cdata($2, strlen($2) + 1);
         jibber_jabber("»»» cdata_phrase = cdata_phrase T_CDATA |%s|", $2);
 }| cdata_phrase T_NUM {
@@ -128,6 +136,10 @@ cdata_phrase:
         rh_parse_parse_store_cdata("l", 2);
 }| cdata_phrase T_LS_LR {
         rh_parse_parse_store_cdata("lr", 3);
+}| cdata_phrase T_LS_G {
+        rh_parse_parse_store_cdata("g", 2);
+}| cdata_phrase T_LS_Z {
+        rh_parse_parse_store_cdata("z", 2);
 }| T_CDATA {
         rh_parse_parse_store_cdata($1, strlen($1) + 1);
         jibber_jabber("»»» cdata_phrase = T_CDATA |%s|", $1);
@@ -145,12 +157,16 @@ cdata_phrase:
         rh_parse_parse_store_cdata("l", 2);
 }| T_LS_LR {
         rh_parse_parse_store_cdata("lr", 3);
+}| T_LS_G {
+        rh_parse_parse_store_cdata("g", 2);
+}| T_LS_Z {
+        rh_parse_parse_store_cdata("z", 2);
 };
 
 command:
   %empty {
-        // alias l
-        rh_parse_parse_store_command("l", 2);
+        // alias t
+        rh_parse_parse_store_command("t", 2);
 }| dir num T_LS_L {
         rh_parse_parse_store_command("l", 2);
         jibber_jabber("»»» command = ls-l");
@@ -160,17 +176,33 @@ command:
         rh_parse_parse_store_command("t", 2);
 }| dir num T_LS_TR {
         rh_parse_parse_store_command("tr", 3);
+/* causes shift/reduce conflict.
+}| dir_non_empty num_non_empty {
+        rh_parse_parse_store_command("t", 2);
+*/
+}| dir_non_empty {
+        rh_parse_parse_store_command("t", 2);
+}| T_LS_G {
+        rh_parse_parse_store_command("g", 2);
+}| T_LS_Z {
+        rh_parse_parse_store_command("z", 2);
 };
 
 dir:
   %empty {
-}| T_CDATA {
+}| dir_non_empty;
+
+dir_non_empty:
+   T_CDATA {
         rh_parse_parse_store_dir($1, strlen($1) + 1);
 };
 
 num:
   %empty {
-}| T_NUM {
+}| num_non_empty;
+
+num_non_empty:
+   T_NUM {
         rh_parse_parse_store_num($1);
 };
 

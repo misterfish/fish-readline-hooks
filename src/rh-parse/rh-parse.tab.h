@@ -45,14 +45,16 @@ extern int yydebug;
 # define YYTOKENTYPE
   enum yytokentype
   {
-    T_CDATA = 258,
-    T_NUM = 259,
-    T_LS_T = 260,
+    T_LS_T = 258,
+    T_CDATA = 259,
+    T_NUM = 260,
     T_LS_TR = 261,
     T_LS_L = 262,
     T_LS_LR = 263,
-    T_END = 264,
-    T_NULL = 265
+    T_LS_G = 264,
+    T_LS_Z = 265,
+    T_END = 266,
+    T_NULL = 267
   };
 #endif
 
@@ -66,7 +68,7 @@ union YYSTYPE
   char const *strval;
   int intval;
 
-#line 70 "rh-parse.tab.h" /* yacc.c:1909  */
+#line 72 "rh-parse.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;

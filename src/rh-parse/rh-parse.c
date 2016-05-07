@@ -135,6 +135,12 @@ int yylex (void) {
     if (!strncmp(token_start_pos, "lr", token_length)) {
         return T_LS_LR;
     }
+    if (!strncmp(token_start_pos, "g", token_length)) {
+        return T_LS_G;
+    }
+    if (!strncmp(token_start_pos, "z", token_length)) {
+        return T_LS_Z;
+    }
 
     // --- send malloc'd to parser.
     yylval.strval = token;

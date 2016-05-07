@@ -238,7 +238,8 @@ fn get_readline_state() -> ReadlineState {
     if point.len() == 0 {
         warn("READLINE_POINT not set, running with test data.".to_string());
         warn("".to_string());
-        line = "mv -iv = /tmp 2 t".to_string();
+        //line = "mv -iv = /tmp 2 t".to_string();
+        line = "= g".to_string();
         // ?
         point = format!("{}", line.len());
     }
@@ -258,8 +259,9 @@ fn get_output(point_in: &str, first_part: String, output: String, should_rewind:
     let point_in_u32 = point_in.parse::<u32>()
         .unwrap_or_else(|e| { panic!("{}", e) });
 
-    let line: String = vec![first_bit, output]
-        .join(" ");
+    let mut as_vec = vec![first_bit, output];
+    as_vec.retain(|e| e != "");
+    let line: String = as_vec.join(" ");
 
     let point: String = (point_in_u32 as u32 + line.len() as u32 + 1)
         .to_string();
@@ -320,7 +322,7 @@ fn store_history(line: &str) {
 // --- commands / handlers.
 
 fn git_commit() -> DispatchCommandResults {
-    let output = match cmd("it", vec!["branch"]) {
+    let output = match cmd("git", vec!["branch"]) {
         Ok(o)   => o,
         _       => return Err(()),
     };
@@ -376,7 +378,7 @@ fn ls_last_priv(arg: &str, dir: &str, num: &str) -> DispatchCommandResults {
 
     // --- empty dir or invalid idx: return "" (and consider it Ok).
 
-    let entry = match result.lines().nth(cnt - 1 - 1 - idx) {
+    let entry = match result.lines().nth(cnt - 1 - (idx - 1)) {
         Some(l)     => l,
         _           => "",
     };
@@ -527,8 +529,8 @@ extern fn parse_store_command(parse_results: *mut ParseResults, data: *const u8,
             .unwrap_or_else(|e| { panic!("{}", e); });
 
         (*parse_results).cmd = thestr.to_string();
+        //warn(format!("ping command! {}", (*parse_results).cmd));
     };
-    //println!("ping command! {}", thestr);
 }
 extern fn parse_store_dir(parse_results: *mut ParseResults, data: *const u8, len: size_t) {
     unsafe {
