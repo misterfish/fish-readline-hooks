@@ -49,7 +49,7 @@ In your .bashrc:
 ```bash
 fish-readline-hooks() {
     local path="<path to the project>/target/release/readline-hooks"
-    binder=$(
+    local binder=$(
         printf '%s%s%s' '"\C-k":eval $(' "$path" ')'
     )
     bind -x "$binder"
