@@ -355,7 +355,8 @@ fn git_commit() -> DispatchCommandResults {
         Ok(o)   => o,
         _       => return Err(()),
     };
-    let mut branch = "UNKNOWN BRANCH".to_string();
+    let mut branch: String = "UNKNOWN BRANCH".to_string();
+
     // --- take first with a star, assume only one.
     for line in output.lines() {
         match line.find('*') {
@@ -373,7 +374,21 @@ fn git_commit() -> DispatchCommandResults {
             _   => {},
         }
     }
-    let output = format!("gpcm '{} ", branch);
+
+    let re = Regex::new(r#"(?x) ^ ([A-Z]+ - \d+) "#)
+        .unwrap_or_else(|e| { panic!("{}", e) });
+
+    let branch_abbrev = match re.captures(&branch) {
+        Some(c) => {
+            match c.at(1) {
+                Some(d) => d,
+                _       => return panic!(),
+            }
+        },
+        _       => branch.as_ref(),
+    };
+
+    let output = format!("gpcm '{} ", branch_abbrev);
     Ok( (output.to_string(), true, false) )
 }
 
