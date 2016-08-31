@@ -113,9 +113,8 @@ int yylex (void) {
     // --- including \0.
     snprintf(token, token_length + 1, "%s", token_start_pos);
 
-    if (!strncmp(token_start_pos, "=", token_length)) {
+    if (!strncmp(token_start_pos, "=", token_length))
         return '=';
-    }
     if (f_is_int_strn(token, token_length)) {
         int as_int = atoi(token);
         if (as_int > 0) {
@@ -123,24 +122,23 @@ int yylex (void) {
             return T_NUM;
         }
     }
-    if (!strncmp(token_start_pos, "t", token_length)) {
+    if (!strncmp(token_start_pos, "t", token_length))
         return T_LS_T;
-    }
-    if (!strncmp(token_start_pos, "tr", token_length)) {
+    if (!strncmp(token_start_pos, "tr", token_length))
         return T_LS_TR;
-    }
-    if (!strncmp(token_start_pos, "l", token_length)) {
+    if (!strncmp(token_start_pos, "l", token_length))
         return T_LS_L;
-    }
-    if (!strncmp(token_start_pos, "lr", token_length)) {
+    if (!strncmp(token_start_pos, "lr", token_length))
         return T_LS_LR;
-    }
-    if (!strncmp(token_start_pos, "g", token_length)) {
-        return T_LS_G;
-    }
-    if (!strncmp(token_start_pos, "z", token_length)) {
+
+    // custom:
+    if (!strncmp(token_start_pos, "ag", token_length))
+        return T_LS_A1;
+    if (!strncmp(token_start_pos, "af", token_length))
+        return T_LS_A2;
+
+    if (!strncmp(token_start_pos, "z", token_length))
         return T_LS_Z;
-    }
 
     // --- send malloc'd to parser.
     yylval.strval = token;

@@ -99,7 +99,8 @@ struct ReadlineState {
 // otherwise you need [T; n] notation.
 
 const DISPATCH: &'static [(&'static str, fn(DispatchData) -> DispatchCommandResults)] = &[
-    (r" ^ g     $", handle_g),
+    (r" ^ ag    $", handle_a1),
+    (r" ^ af    $", handle_a2),
     (r" ^ t     $", handle_t),
     (r" ^ tr    $", handle_tr),
     (r" ^ l     $", handle_l),
@@ -392,6 +393,10 @@ fn git_commit() -> DispatchCommandResults {
     Ok( (output.to_string(), true, false) )
 }
 
+fn git_checkout() -> DispatchCommandResults {
+    Ok( ("gpco APP-".to_string(), true, false) )
+}
+
 fn ls_last_priv(arg: &str, dir: &str, num: &str) -> DispatchCommandResults {
     let mut arg_vec = match arg.len() {
         0   => vec![],
@@ -441,8 +446,11 @@ fn ls_last_priv(arg: &str, dir: &str, num: &str) -> DispatchCommandResults {
     Ok( (ret, false, true) )
 }
 
-fn handle_g(_: DispatchData) -> DispatchCommandResults {
+fn handle_a1(_: DispatchData) -> DispatchCommandResults {
     git_commit()
+}
+fn handle_a2(_: DispatchData) -> DispatchCommandResults {
+    git_checkout()
 }
 
 // --- t and tr switched on purpose.

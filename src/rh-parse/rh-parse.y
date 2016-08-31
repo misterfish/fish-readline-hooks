@@ -95,8 +95,13 @@ Last field is an optional alias in "".
 %token T_LS_TR
 %token T_LS_L
 %token T_LS_LR
-%token T_LS_G
 %token T_LS_Z
+
+/* custom: */
+%token T_LS_A1
+%token T_LS_A2
+
+
 %token T_END
 
 /* Just to make stacking of rules easier (never returned) */
@@ -136,8 +141,13 @@ cdata_phrase:
         rh_parse_parse_store_cdata("l", 2);
 }| cdata_phrase T_LS_LR {
         rh_parse_parse_store_cdata("lr", 3);
-}| cdata_phrase T_LS_G {
-        rh_parse_parse_store_cdata("g", 2);
+
+        // custom:
+}| cdata_phrase T_LS_A1 {
+        rh_parse_parse_store_cdata("ag", 3);
+}| cdata_phrase T_LS_A2 {
+        rh_parse_parse_store_cdata("af", 3);
+
 }| cdata_phrase T_LS_Z {
         rh_parse_parse_store_cdata("z", 2);
 }| T_CDATA {
@@ -157,8 +167,13 @@ cdata_phrase:
         rh_parse_parse_store_cdata("l", 2);
 }| T_LS_LR {
         rh_parse_parse_store_cdata("lr", 3);
-}| T_LS_G {
-        rh_parse_parse_store_cdata("g", 2);
+
+        // custom:
+}| T_LS_A1 {
+        rh_parse_parse_store_cdata("ag", 3);
+}| T_LS_A2 {
+        rh_parse_parse_store_cdata("af", 3);
+
 }| T_LS_Z {
         rh_parse_parse_store_cdata("z", 2);
 };
@@ -182,8 +197,13 @@ command:
 */
 }| dir_non_empty {
         rh_parse_parse_store_command("t", 2);
-}| T_LS_G {
-        rh_parse_parse_store_command("g", 2);
+
+        // custom:
+}| T_LS_A1 {
+        rh_parse_parse_store_command("ag", 3);
+}| T_LS_A2 {
+        rh_parse_parse_store_command("af", 3);
+
 }| T_LS_Z {
         rh_parse_parse_store_command("z", 2);
 };
