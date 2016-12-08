@@ -389,7 +389,7 @@ fn git_commit() -> DispatchCommandResults {
         _       => branch.as_ref(),
     };
 
-    let output = format!("gpcm '{} ", branch_abbrev);
+    let output = format!("gpcm '{}' -e ", branch_abbrev);
     Ok( (output.to_string(), true, false) )
 }
 
