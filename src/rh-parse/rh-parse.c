@@ -19,8 +19,7 @@
 // --- yylex, rh_parse_store/get routines.
 #include "rh-parse.h"
 
-#include "../../lib/fish-lib-util/fish-util/fish-util.h"
-//#include "../../lib/fish-lib-util/fish-utils/fish-utils.h"
+#include <fish-util/fish-util.h>
 
 static struct {
     int done;

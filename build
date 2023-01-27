@@ -26,4 +26,5 @@ shift $((OPTIND-1))
 
 cmd touch src/*.rs
 cmd ./make
+xport RUSTFLAGS '-Lsrc/rh-parse'
 cmd cargo build --release

@@ -1,3 +1,6 @@
+[submodule "lib/alleycat-bash"]
+	path = lib/alleycat-bash
+	url = https://gitlab.com/alleycatcc/alleycat-bash
 [submodule "lib/fish-lib-util"]
 	path = lib/fish-lib-util
-	url = http://github.com/misterfish/fish-lib-util
+	url = https://github.com/misterfish/fish-lib-util

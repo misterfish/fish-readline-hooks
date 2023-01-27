@@ -1,5 +1,3 @@
-
-
 target-install
 target
 *.o
@@ -10,12 +8,8 @@ target
 *.tab.c
 *.tab.h
 
-
-#!target/debug/deps
-#target/debug/deps/*.rlib
-
 lib/fish-lib-util
 
-
-vi
-.vido-files
+.fish-tree-files
+*.swo
+*.swp
